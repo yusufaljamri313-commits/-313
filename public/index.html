@@ -400,51 +400,32 @@
             }
         }
 
-        @keyframes pulse-soft {
-
-            0%,
-            100% {
-                transform: scale(1);
-                opacity: 1;
-            }
-
-            50% {
-                transform: scale(1.02);
-                opacity: 0.8;
-            }
+        .processing-card {
+            background: rgba(0, 74, 173, 0.05);
+            border: 1px solid var(--primary);
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
         }
 
-        @keyframes slide-glow {
+        @keyframes sweep {
             0% {
-                left: -100%;
+                transform: translateX(-100%);
             }
 
             100% {
-                left: 100%;
+                transform: translateX(100%);
             }
         }
 
-        .processing-title {
-            animation: pulse-soft 3s infinite ease-in-out;
-            font-size: 2.8rem;
-            font-weight: 800;
-            letter-spacing: -1px;
-            background: linear-gradient(135deg, #fff 0%, var(--primary) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .progress-shine {
+        .progress-sweep {
             position: absolute;
             top: 0;
-            width: 100px;
+            left: 0;
+            width: 100%;
             height: 100%;
             background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-            animation: slide-glow 2s infinite;
-        }
-
-        .shimmer {
-            animation: slide-glow 2s infinite linear;
+            animation: sweep 1.5s infinite;
         }
     </style>
 </head>
@@ -1743,123 +1724,131 @@
                 if (!success) { alert('رصيدك غير كافٍ.'); return; }
 
                 setStatus('processing');
-                setLog('يتم الآن الاتصال بمصفوفة السيرفرات السحابية...');
-                setTip('بدء التشغيل الآمن...');
                 setProgress(0);
+                setLog('جاري الاتصال بمركز المعالجة السحابي (Cloud Engine v5)...');
+                setTip('تهيئة ميكسر Adobe Audition الذكي...');
 
-                // --- Professional Progress Logic (1% every 15s) ---
-                let currentProgress = 0;
-                const progressInterval = setInterval(() => {
-                    if (currentProgress < 99) {
-                        currentProgress += 1;
-                        setProgress(currentProgress);
-                    }
+                // Professional Progress Control: 1% every 15s
+                let currentP = 0;
+                const pInterval = setInterval(() => {
+                    if (currentP < 99) { currentP++; setProgress(currentP); }
                 }, 15000);
 
-                const cloudSteps = [
-                    "تحليل الترددات الصوتية عبر خوارزميات Neural Mix...",
-                    "تطبيق العزل الصوتي واستخلاص البصمة الرقمية...",
-                    "مزامنة المسارات الصوتية بدقة FFmpeg Pro...",
-                    "توزيع المسارات الصوتية في الفضاء السحابي (Mastering)...",
-                    "إتمام اللمسات النهائية وتشفير الملف بصيغة MP3 Pro..."
+                const stepMessages = [
+                    "تطبيق Parametric EQ (HP 90Hz / Clarity Boost)...",
+                    "حقن تراك الرادود بـ Studio Reverb و Analog Delay...",
+                    "معالجة Dynamics Processing (Vocal Compander)...",
+                    "تقوية اللطمة وتضخيم الترددات تحت 100Hz...",
+                    "المكساج النهائي بتطبيق Broadcast Multiband Compressor..."
                 ];
-                let stepIdx = 0;
-                const stepInterval = setInterval(() => {
-                    stepIdx = (stepIdx + 1) % cloudSteps.length;
-                    setLog(cloudSteps[stepIdx]);
+                let msgIdx = 0;
+                const msgInterval = setInterval(() => {
+                    msgIdx = (msgIdx + 1) % stepMessages.length;
+                    setLog(stepMessages[msgIdx]);
                 }, 30000);
 
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
 
                 try {
-                    const decodeFile = async (file) => {
-                        const arrayBuffer = await file.arrayBuffer();
-                        return await audioCtx.decodeAudioData(arrayBuffer);
+                    const decode = async (file) => {
+                        const buffer = await file.arrayBuffer();
+                        return await audioCtx.decodeAudioData(buffer);
                     };
 
-                    setTip('قراءة البيانات من السيرفر...');
-                    const vocalBuf = await decodeFile(reciter);
+                    setTip('تحليل البصمة الصوتية...');
+                    const vocalBuf = await decode(reciter);
+                    const mournerBuffers = [];
+                    const musicFiles = mixType === 'internal' ? internalMourners : externalLatmas;
+                    for (let f of musicFiles) if (f) mournerBuffers.push(await decode(f));
 
-                    let musicBuffers = [];
-                    const musicFiles = mixType === 'internal' ? internalMourners.filter(f => f) : externalLatmas.filter(f => f);
-                    for (let f of musicFiles) {
-                        musicBuffers.push(await decodeFile(f));
-                    }
+                    const maxDur = Math.max(vocalBuf.duration, ...mournerBuffers.map(b => b.duration));
+                    const offCtx = new OfflineAudioContext(2, maxDur * 44100, 44100);
 
-                    const maxDuration = Math.max(vocalBuf.duration, ...musicBuffers.map(b => b.duration));
-                    const offlineCtx = new OfflineAudioContext(2, maxDuration * 44100, 44100);
+                    // --- Professional Reciter Chain (Audition Specs) ---
+                    const vSource = offCtx.createBufferSource();
+                    vSource.buffer = vocalBuf;
 
-                    const addTrack = (buf, vol) => {
-                        const s = offlineCtx.createBufferSource();
-                        s.buffer = buf;
-                        const g = offlineCtx.createGain();
-                        g.gain.value = vol;
-                        s.connect(g);
-                        g.connect(offlineCtx.destination);
-                        s.start(0);
-                    };
+                    // 1. Parametric EQ
+                    const hp = offCtx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 90;
+                    const bass = offCtx.createBiquadFilter(); bass.type = 'peaking'; bass.frequency.value = 150; bass.gain.value = 2.5;
+                    const mid = offCtx.createBiquadFilter(); mid.type = 'peaking'; mid.frequency.value = 400; mid.gain.value = -3;
+                    const hMid = offCtx.createBiquadFilter(); hMid.type = 'peaking'; hMid.frequency.value = 3500; hMid.gain.value = 3;
 
-                    addTrack(vocalBuf, 1.0);
-                    musicBuffers.forEach(b => addTrack(b, 0.75));
+                    // 2. Dynamics Processing (Compander)
+                    const comp = offCtx.createDynamicsCompressor();
+                    comp.threshold.value = -20; comp.ratio.value = 4; comp.attack.value = 0.01;
 
-                    const renderedBuffer = await offlineCtx.startRendering();
-                    setTip('تصدير النتيجة النهائية...');
+                    // 3. Analog Delay (500ms)
+                    const delayNode = offCtx.createDelay(1.0); delayNode.delayTime.value = 0.5;
+                    const feedback = offCtx.createGain(); feedback.gain.value = 0.20;
+                    const delayWet = offCtx.createGain(); delayWet.gain.value = 0.15;
+                    delayNode.connect(feedback); feedback.connect(delayNode);
 
-                    const encodeMP3 = async (audioBuffer) => {
-                        return new Promise(async (resolve) => {
-                            const channels = audioBuffer.numberOfChannels;
-                            const sampleRate = audioBuffer.sampleRate;
-                            const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, 128);
-                            const left = audioBuffer.getChannelData(0);
-                            const right = channels > 1 ? audioBuffer.getChannelData(1) : left;
-                            const mp3Data = [];
-                            const blockSize = 1152 * 50;
+                    // 4. Studio Reverb (Simulated Delay Network)
+                    const revWet = offCtx.createGain(); revWet.gain.value = 0.20;
+                    const revDelay = offCtx.createDelay(0.2); revDelay.delayTime.value = 0.08;
 
-                            const leftI16 = new Int16Array(left.length);
-                            const rightI16 = new Int16Array(right.length);
-                            for (let i = 0; i < left.length; i++) {
-                                leftI16[i] = left[i] < 0 ? left[i] * 0x8000 : left[i] * 0x7FFF;
-                                rightI16[i] = right[i] < 0 ? right[i] * 0x8000 : right[i] * 0x7FFF;
+                    // Routing Reciter
+                    vSource.connect(hp); hp.connect(bass); bass.connect(mid); mid.connect(hMid); hMid.connect(comp);
+                    comp.connect(offCtx.destination); // Dry
+                    comp.connect(delayNode); delayNode.connect(delayWet); delayWet.connect(offCtx.destination);
+                    comp.connect(revDelay); revDelay.connect(revWet); revWet.connect(offCtx.destination);
+
+                    // --- Professional Slap Chain ---
+                    mournerBuffers.forEach(b => {
+                        const mSource = offCtx.createBufferSource();
+                        mSource.buffer = b;
+                        const mEq = offCtx.createBiquadFilter(); mEq.type = 'peaking'; mEq.frequency.value = 100; mEq.gain.value = 5;
+                        const mBoost = offCtx.createGain(); mBoost.gain.value = 1.41;
+                        const mLimiter = offCtx.createDynamicsCompressor(); mLimiter.threshold.value = -1.0; mLimiter.ratio.value = 20;
+
+                        mSource.connect(mEq); mEq.connect(mBoost); mBoost.connect(mLimiter); mLimiter.connect(offCtx.destination);
+                        mSource.start(0);
+                    });
+
+                    vSource.start(0);
+                    const rendered = await offCtx.startRendering();
+
+                    // MP3 Encoding
+                    const mp3Blob = await (new Promise(async (res) => {
+                        const encoder = new lamejs.Mp3Encoder(2, 44100, 192);
+                        const left = rendered.getChannelData(0);
+                        const right = rendered.getChannelData(1);
+                        const mp3data = [];
+                        const bSize = 1152 * 100;
+
+                        for (let i = 0; i < left.length; i += bSize) {
+                            const lChunk = new Int16Array(bSize); const rChunk = new Int16Array(bSize);
+                            for (let j = 0; j < bSize && i + j < left.length; j++) {
+                                lChunk[j] = left[i + j] < 0 ? left[i + j] * 0x8000 : left[i + j] * 0x7FFF;
+                                rChunk[j] = right[i + j] < 0 ? right[i + j] * 0x8000 : right[i + j] * 0x7FFF;
                             }
+                            const buf = encoder.encodeBuffer(lChunk, rChunk);
+                            if (buf.length > 0) mp3data.push(buf);
+                            if (i % (bSize * 5) === 0) await new Promise(r => setTimeout(r, 0));
+                        }
+                        const final = encoder.flush();
+                        if (final.length > 0) mp3data.push(final);
+                        res(new Blob(mp3data, { type: 'audio/mp3' }));
+                    }));
 
-                            for (let i = 0; i < leftI16.length; i += blockSize) {
-                                const l = leftI16.subarray(i, i + blockSize);
-                                const r = rightI16.subarray(i, i + blockSize);
-                                const mp3buf = mp3encoder.encodeBuffer(l, r);
-                                if (mp3buf.length > 0) mp3Data.push(mp3buf);
-                                if (i % (blockSize * 2) === 0) await new Promise(res => setTimeout(res, 50));
-                            }
-                            const flush = mp3encoder.flush();
-                            if (flush.length > 0) mp3Data.push(flush);
-                            resolve(new Blob(mp3Data, { type: 'audio/mp3' }));
-                        });
-                    };
+                    const resUrl = URL.createObjectURL(mp3Blob);
+                    clearInterval(pInterval); clearInterval(msgInterval);
+                    setMp3Url(resUrl); setProgress(100); setStatus('success');
 
-                    const mp3Blob = await encodeMP3(renderedBuffer);
-                    const mUrl = URL.createObjectURL(mp3Blob);
-
-                    clearInterval(progressInterval);
-                    clearInterval(stepInterval);
-
-                    setMp3Url(mUrl);
                     addHistoryItem({
                         id: Date.now(),
-                        name: `مكساج سحابي ${mixType === 'internal' ? '(عزاء)' : '(خارجي)'}`,
+                        name: `مكساج احترافي ${mixType === 'internal' ? '(عزاء)' : '(خارجي)'}`,
                         date: new Date().toLocaleDateString('ar-BH'),
                         type: 'audio',
-                        url: mUrl,
+                        url: resUrl,
                         status: 'completed'
                     });
 
-                    setProgress(100);
-                    setLog('تمت المعالجة السحابية بنجاح!');
-                    setTimeout(() => setStatus('success'), 1000);
-
                 } catch (e) {
-                    clearInterval(progressInterval);
-                    clearInterval(stepInterval);
-                    console.error('Core Mix Fail', e);
-                    alert("نعتذر، حدث ضغط غير متوقع على خوادم المعالجة. يرجى تجربة ملفات أقصر أو تحديث الصفحة.");
+                    clearInterval(pInterval); clearInterval(msgInterval);
+                    console.error(e);
+                    alert("نعتذر، حدث تعارض في خوادم المعالجة السحابية.");
                     setStatus('input');
                 }
             };
@@ -1868,32 +1857,37 @@
                 <div className="container animate-fade-in" style={{ padding: '50px', maxWidth: '600px', textAlign: 'center' }}>
                     <div className="card" style={{ borderColor: 'var(--success)' }}>
                         <h1 style={{ color: 'var(--success)', marginBottom: '20px' }}>{t('mix_success_msg')}</h1>
-                        <audio controls src={mp3Url || wavUrl} style={{ width: '100%', margin: '20px 0' }} />
+                        <audio controls src={mp3Url} style={{ width: '100%', margin: '20px 0' }} />
                         <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                            {mp3Url && <a href={mp3Url} download="aza-mix.mp3" className="btn btn-primary" style={{ padding: '10px 25px' }}>{t('res_download')} MP3</a>}
-                            {wavUrl && <a href={wavUrl} download="aza-mix-highres.wav" className="btn btn-outline">{t('btn_download_wav')}</a>}
-                            {sesxUrl && <a href={sesxUrl} download="aza-project.sesx" className="btn btn-outline" style={{ borderColor: '#a29bfe', color: '#a29bfe' }}>{t('mix_btn_audition')} (.sesx)</a>}
-                            {auditionUrl && <a href={auditionUrl} download="aza-mix-audition.wav" className="btn btn-outline" style={{ fontSize: '0.8rem', opacity: 0.7 }}>WAV 32-bit</a>}
+                            <a href={mp3Url} download="aza-mix.mp3" className="btn btn-primary" style={{ padding: '10px 25px' }}>{t('res_download')} MP3</a>
                         </div>
-                        <div style={{ marginTop: '20px' }}><button onClick={() => { setStatus('input'); setMp3Url(null); setWavUrl(null); }} className="btn btn-outline">{t('mix_btn_new')}</button></div>
+                        <div style={{ marginTop: '20px' }}><button onClick={() => { setStatus('input'); setMp3Url(null); }} className="btn btn-outline">{t('mix_btn_new')}</button></div>
                     </div>
                 </div>
             );
 
             if (status === 'processing') return (
-                <div className="container animate-fade-in" style={{ padding: '100px 20px', maxWidth: '800px', textAlign: 'center' }}>
-                    <h1 className="processing-title">جاري معالجة الصوت</h1>
+                <div className="container animate-fade-in" style={{ padding: '80px 20px', maxWidth: '600px', textAlign: 'center' }}>
+                    <div className="processing-card">
+                        <div style={{ fontSize: '3.5rem', marginBottom: '10px' }}>⏳</div>
+                        <h2 style={{ marginBottom: '20px', color: 'var(--primary)' }}>جاري المعالجة السحابية الاحترافية</h2>
+                        <p style={{ opacity: 0.7, fontSize: '0.9rem', marginBottom: '30px' }}>يتم الآن استخدام محاكاة Adobe Audition Engine لضمان أعلى جودة مكس</p>
 
-                    <div style={{ position: 'relative', width: '100%', height: '20px', background: 'var(--surface)', borderRadius: '10px', margin: '50px 0', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                        <div style={{ width: `${progress}%`, height: '100%', background: 'linear-gradient(90deg, var(--primary) 0%, #00d2ff 100%)', transition: 'width 1s linear', position: 'relative' }}>
-                            <div className="progress-shine"></div>
+                        <div style={{ width: '100%', height: '14px', background: 'var(--surface)', borderRadius: '7px', margin: '20px 0', overflow: 'hidden', border: '1px solid var(--border)', position: 'relative' }}>
+                            <div style={{ width: `${progress}%`, height: '100%', background: 'var(--primary)', transition: 'width 1s linear' }}>
+                                <div className="progress-sweep"></div>
+                            </div>
                         </div>
-                    </div>
 
-                    <div style={{ marginTop: '30px' }}>
-                        <div style={{ fontSize: '3rem', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '10px' }}>{progress}%</div>
-                        <p style={{ color: 'var(--primary)', fontSize: '1.2rem', minHeight: '1.5em', fontWeight: '500' }}>{log}</p>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '15px', opacity: 0.5 }}>{tip}</p>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <span style={{ color: 'var(--primary)', fontWeight: 'bold', fontSize: '1.2rem' }}>{progress}%</span>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{tip}</span>
+                        </div>
+
+                        <div style={{ padding: '15px', background: 'rgba(0,0,0,0.3)', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                            <p style={{ color: 'var(--primary)', fontSize: '0.95rem', margin: 0 }}>{log}</p>
+                        </div>
+                        <p style={{ fontSize: '0.75rem', marginTop: '20px', opacity: 0.5 }}>نعدلك الصوت بمواصفات الموكب الاحترافية، يرجى الانتظار...</p>
                     </div>
                 </div>
             );
