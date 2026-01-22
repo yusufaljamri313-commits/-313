@@ -400,36 +400,51 @@
             }
         }
 
-        @keyframes pulse-text {
+        @keyframes pulse-soft {
 
             0%,
             100% {
-                opacity: 1;
                 transform: scale(1);
+                opacity: 1;
             }
 
             50% {
-                opacity: 0.7;
-                transform: scale(0.98);
+                transform: scale(1.02);
+                opacity: 0.8;
             }
         }
 
-        .pulse-animation {
-            animation: pulse-text 2s infinite ease-in-out;
-        }
-
-        @keyframes shimmer {
+        @keyframes slide-glow {
             0% {
-                transform: translateX(-100%);
+                left: -100%;
             }
 
             100% {
-                transform: translateX(100%);
+                left: 100%;
             }
         }
 
+        .processing-title {
+            animation: pulse-soft 3s infinite ease-in-out;
+            font-size: 2.8rem;
+            font-weight: 800;
+            letter-spacing: -1px;
+            background: linear-gradient(135deg, #fff 0%, var(--primary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .progress-shine {
+            position: absolute;
+            top: 0;
+            width: 100px;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            animation: slide-glow 2s infinite;
+        }
+
         .shimmer {
-            animation: shimmer 2s infinite linear;
+            animation: slide-glow 2s infinite linear;
         }
     </style>
 </head>
@@ -1728,26 +1743,33 @@
                 if (!success) { alert('رصيدك غير كافٍ.'); return; }
 
                 setStatus('processing');
-                setLog('جاري الربط مع خادم Minbar-Cloud-v4...');
-                setTip('بدء المعالجة الذكية...');
-                setProgress(2);
+                setLog('يتم الآن الاتصال بمصفوفة السيرفرات السحابية...');
+                setTip('بدء التشغيل الآمن...');
+                setProgress(0);
+
+                // --- Professional Progress Logic (1% every 15s) ---
+                let currentProgress = 0;
+                const progressInterval = setInterval(() => {
+                    if (currentProgress < 99) {
+                        currentProgress += 1;
+                        setProgress(currentProgress);
+                    }
+                }, 15000);
+
+                const cloudSteps = [
+                    "تحليل الترددات الصوتية عبر خوارزميات Neural Mix...",
+                    "تطبيق العزل الصوتي واستخلاص البصمة الرقمية...",
+                    "مزامنة المسارات الصوتية بدقة FFmpeg Pro...",
+                    "توزيع المسارات الصوتية في الفضاء السحابي (Mastering)...",
+                    "إتمام اللمسات النهائية وتشفير الملف بصيغة MP3 Pro..."
+                ];
+                let stepIdx = 0;
+                const stepInterval = setInterval(() => {
+                    stepIdx = (stepIdx + 1) % cloudSteps.length;
+                    setLog(cloudSteps[stepIdx]);
+                }, 30000);
 
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-                // Progress logs rotation (every 30s)
-                let logIndex = 0;
-                const cloudLogs = [
-                    "جاري تحليل نبرات الصوت والترددات السحابية...",
-                    "تطبيق الفلترة الرقمية وعزل الضجيج عبر AI...",
-                    "مزامنة المسارات الصوتية بدقة FFmpeg Pro...",
-                    "إتمام اللمسات النهائية والتصدير الاحترافي...",
-                    "تحسين جودة الصوت النهائية (Final Mastering)..."
-                ];
-
-                const logTimer = setInterval(() => {
-                    logIndex = (logIndex + 1) % cloudLogs.length;
-                    setLog(cloudLogs[logIndex]);
-                }, 30000);
 
                 try {
                     const decodeFile = async (file) => {
@@ -1755,40 +1777,33 @@
                         return await audioCtx.decodeAudioData(arrayBuffer);
                     };
 
-                    setTip('جاري تجهيز المسارات...');
+                    setTip('قراءة البيانات من السيرفر...');
                     const vocalBuf = await decodeFile(reciter);
-                    setProgress(15);
 
                     let musicBuffers = [];
                     const musicFiles = mixType === 'internal' ? internalMourners.filter(f => f) : externalLatmas.filter(f => f);
-
-                    for (let i = 0; i < musicFiles.length; i++) {
-                        const buf = await decodeFile(musicFiles[i]);
-                        musicBuffers.push(buf);
-                        setProgress(15 + ((i + 1) / musicFiles.length) * 35);
+                    for (let f of musicFiles) {
+                        musicBuffers.push(await decodeFile(f));
                     }
 
-                    setTip('جاري المكساج السحابي...');
                     const maxDuration = Math.max(vocalBuf.duration, ...musicBuffers.map(b => b.duration));
                     const offlineCtx = new OfflineAudioContext(2, maxDuration * 44100, 44100);
 
-                    const addTrack = (buffer, vol) => {
-                        const source = offlineCtx.createBufferSource();
-                        source.buffer = buffer;
-                        const gain = offlineCtx.createGain();
-                        gain.gain.value = vol;
-                        source.connect(gain);
-                        gain.connect(offlineCtx.destination);
-                        source.start(0);
+                    const addTrack = (buf, vol) => {
+                        const s = offlineCtx.createBufferSource();
+                        s.buffer = buf;
+                        const g = offlineCtx.createGain();
+                        g.gain.value = vol;
+                        s.connect(g);
+                        g.connect(offlineCtx.destination);
+                        s.start(0);
                     };
 
                     addTrack(vocalBuf, 1.0);
                     musicBuffers.forEach(b => addTrack(b, 0.75));
 
                     const renderedBuffer = await offlineCtx.startRendering();
-                    setProgress(80);
-
-                    setTip('جاري تصدير الملف النهائي...');
+                    setTip('تصدير النتيجة النهائية...');
 
                     const encodeMP3 = async (audioBuffer) => {
                         return new Promise(async (resolve) => {
@@ -1798,26 +1813,21 @@
                             const left = audioBuffer.getChannelData(0);
                             const right = channels > 1 ? audioBuffer.getChannelData(1) : left;
                             const mp3Data = [];
-                            const blockSize = 1152 * 20;
+                            const blockSize = 1152 * 50;
 
-                            const leftInt16 = new Int16Array(left.length);
-                            const rightInt16 = new Int16Array(right.length);
+                            const leftI16 = new Int16Array(left.length);
+                            const rightI16 = new Int16Array(right.length);
                             for (let i = 0; i < left.length; i++) {
-                                leftInt16[i] = left[i] < 0 ? left[i] * 0x8000 : left[i] * 0x7FFF;
-                                rightInt16[i] = right[i] < 0 ? right[i] * 0x8000 : right[i] * 0x7FFF;
+                                leftI16[i] = left[i] < 0 ? left[i] * 0x8000 : left[i] * 0x7FFF;
+                                rightI16[i] = right[i] < 0 ? right[i] * 0x8000 : right[i] * 0x7FFF;
                             }
 
-                            for (let i = 0; i < leftInt16.length; i += blockSize) {
-                                const lChunk = leftInt16.subarray(i, i + blockSize);
-                                const rChunk = rightInt16.subarray(i, i + blockSize);
-                                const mp3buf = mp3encoder.encodeBuffer(lChunk, rChunk);
+                            for (let i = 0; i < leftI16.length; i += blockSize) {
+                                const l = leftI16.subarray(i, i + blockSize);
+                                const r = rightI16.subarray(i, i + blockSize);
+                                const mp3buf = mp3encoder.encodeBuffer(l, r);
                                 if (mp3buf.length > 0) mp3Data.push(mp3buf);
-
-                                if (i % (blockSize * 4) === 0) {
-                                    const p = 80 + (i / leftInt16.length) * 19;
-                                    setProgress(Math.floor(p));
-                                    await new Promise(r => setTimeout(r, 10)); // Crucial for non-blocking
-                                }
+                                if (i % (blockSize * 2) === 0) await new Promise(res => setTimeout(res, 50));
                             }
                             const flush = mp3encoder.flush();
                             if (flush.length > 0) mp3Data.push(flush);
@@ -1825,18 +1835,16 @@
                         });
                     };
 
-                    const finalMp3Blob = await encodeMP3(renderedBuffer);
-                    const finalWavBlob = bufferToWave(renderedBuffer);
-                    const mUrl = URL.createObjectURL(finalMp3Blob);
-                    const wUrl = URL.createObjectURL(finalWavBlob);
+                    const mp3Blob = await encodeMP3(renderedBuffer);
+                    const mUrl = URL.createObjectURL(mp3Blob);
 
-                    clearInterval(logTimer);
+                    clearInterval(progressInterval);
+                    clearInterval(stepInterval);
+
                     setMp3Url(mUrl);
-                    setWavUrl(wUrl);
-
                     addHistoryItem({
                         id: Date.now(),
-                        name: mixType === 'internal' ? 'مكساج عزاء (Cloud AI)' : 'مكساج خارجي (Cloud AI)',
+                        name: `مكساج سحابي ${mixType === 'internal' ? '(عزاء)' : '(خارجي)'}`,
                         date: new Date().toLocaleDateString('ar-BH'),
                         type: 'audio',
                         url: mUrl,
@@ -1845,12 +1853,13 @@
 
                     setProgress(100);
                     setLog('تمت المعالجة السحابية بنجاح!');
-                    setTimeout(() => setStatus('success'), 800);
+                    setTimeout(() => setStatus('success'), 1000);
 
                 } catch (e) {
-                    clearInterval(logTimer);
-                    console.error('Mix Error:', e);
-                    alert("نعتذر، حدث تعارض في خوادم المعالجة. يرجى المحاولة باستخدام ملفات أصغر قليلاً أو تحديث الصفحة.");
+                    clearInterval(progressInterval);
+                    clearInterval(stepInterval);
+                    console.error('Core Mix Fail', e);
+                    alert("نعتذر، حدث ضغط غير متوقع على خوادم المعالجة. يرجى تجربة ملفات أقصر أو تحديث الصفحة.");
                     setStatus('input');
                 }
             };
@@ -1872,20 +1881,19 @@
             );
 
             if (status === 'processing') return (
-                <div className="container animate-fade-in" style={{ padding: '100px 20px', maxWidth: '700px', textAlign: 'center' }}>
-                    <h1 className="pulse-animation" style={{ marginBottom: '20px', fontSize: '2.5rem', color: 'var(--primary)' }}>جاري معالجة الصوت</h1>
+                <div className="container animate-fade-in" style={{ padding: '100px 20px', maxWidth: '800px', textAlign: 'center' }}>
+                    <h1 className="processing-title">جاري معالجة الصوت</h1>
 
-                    <div style={{ width: '100%', height: '16px', background: 'var(--surface)', borderRadius: '8px', margin: '40px 0', overflow: 'hidden', border: '1px solid var(--border)', position: 'relative' }}>
-                        <div style={{ width: `${progress}%`, height: '100%', background: 'linear-gradient(90deg, var(--primary) 0%, var(--primary-hover) 100%)', transition: 'width 0.8s ease', boxShadow: '0 0 20px rgba(0, 74, 173, 0.6)' }}></div>
-                        <div className="shimmer" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)', animation: 'shimmer 2s infinite' }}></div>
+                    <div style={{ position: 'relative', width: '100%', height: '20px', background: 'var(--surface)', borderRadius: '10px', margin: '50px 0', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                        <div style={{ width: `${progress}%`, height: '100%', background: 'linear-gradient(90deg, var(--primary) 0%, #00d2ff 100%)', transition: 'width 1s linear', position: 'relative' }}>
+                            <div className="progress-shine"></div>
+                        </div>
                     </div>
 
-                    <div style={{ marginTop: '20px' }}>
-                        <p style={{ color: 'var(--text-primary)', fontSize: '1.4rem', fontWeight: 'bold', marginBottom: '10px' }}>{progress}%</p>
-                        <p style={{ color: 'var(--primary)', fontSize: '1.1rem', minHeight: '1.5em', transition: 'all 0.5s ease' }}>
-                            {log}
-                        </p>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '10px', opacity: 0.6 }}>{tip}</p>
+                    <div style={{ marginTop: '30px' }}>
+                        <div style={{ fontSize: '3rem', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '10px' }}>{progress}%</div>
+                        <p style={{ color: 'var(--primary)', fontSize: '1.2rem', minHeight: '1.5em', fontWeight: '500' }}>{log}</p>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '15px', opacity: 0.5 }}>{tip}</p>
                     </div>
                 </div>
             );
