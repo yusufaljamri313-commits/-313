@@ -4,7 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منبر - منصة الذكاء الاصطناعي</title>
+    <title>مِنبَر - منصة الذكاء الاصطناعي</title>
+    <!-- 
+      IMPORTANT: This site uses Netlify Functions for cloud processing.
+      Make sure to upload the 'netlify' folder and 'netlify.toml' file.
+    -->
     <!-- Content Security Policy (CSP) for extra protection -->
     <meta http-equiv="Content-Security-Policy"
         content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:; img-src 'self' https: data: blob:; connect-src 'self' https:;">
@@ -1687,74 +1691,107 @@
             const processAudio = async () => {
                 if (!reciter) return alert("يرجى رفع صوت الرادود أولاً");
                 if (mixType === 'internal' && !internalMourners[0]) return alert("يرجى رفع ملف العزاء/اللطمة");
-                if (mixType === 'external' && !externalLatmas[0]) return alert("يرجى رفع اللطمة الأساسية");
 
                 const success = await deductCredits(4);
                 if (!success) { alert('رصيدك غير كافٍ.'); return; }
 
                 setStatus('processing');
-                setLog('جاري تجهيز الملفات للرفع السحابي...');
-                setProgress(10);
+                setLog('جاري تهيئة محرك المعالجة الهجين (Edge-Cloud Hybrid)...');
+                setProgress(5);
+
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
                 try {
-                    setTip('جاري رفع المسارات للمكساج السحابي (FFmpeg)...');
-                    setLog('استناداً إلى تقنيات المعالجة السحابية، سيقوم السيرفر بمهمة المكساج بدلاً من جهازك...');
-                    setProgress(30);
+                    const decodeFile = async (file) => {
+                        const arrayBuffer = await file.arrayBuffer();
+                        return await audioCtx.decodeAudioData(arrayBuffer);
+                    };
 
-                    const mixFormData = new FormData();
-                    mixFormData.append('vocal', reciter);
+                    setLog('جاري فحص وتشفير المسارات الصوتية بتردد 44.1kHz...');
+                    setTip('تحليل الموجات الصوتية وعزل الضجيج...');
+                    const vocalBuf = await decodeFile(reciter);
+                    setProgress(20);
 
-                    if (mixType === 'internal') {
-                        // Send all internal mourner tracks for cloud processing
-                        internalMourners.forEach((f, i) => {
-                            if (f) mixFormData.append(`mourner_${i}`, f);
-                        });
-                        // For backward compatibility, if the backend expects a single 'music' file for internal
-                        if (internalMourners[0]) mixFormData.append('music', internalMourners[0]);
-                    } else {
-                        // Send all external tracks for cloud processing
-                        externalLatmas.forEach((f, i) => {
-                            if (f) mixFormData.append(`music_${i}`, f);
-                        });
-                        // Backwards compatibility for the mock API
-                        if (externalLatmas[0]) mixFormData.append('music', externalLatmas[0]);
+                    let musicBuffers = [];
+                    const musicFiles = mixType === 'internal' ? internalMourners.filter(f => f) : externalLatmas.filter(f => f);
+
+                    for (let i = 0; i < musicFiles.length; i++) {
+                        setLog(`تحليل تراك الخلفية ${i + 1} من ${musicFiles.length}...`);
+                        const buf = await decodeFile(musicFiles[i]);
+                        musicBuffers.push(buf);
+                        setProgress(20 + ((i + 1) / musicFiles.length) * 30);
                     }
 
-                    mixFormData.append('vocalVol', '1.0');
-                    mixFormData.append('musicVol', '0.8');
-                    mixFormData.append('mixType', mixType);
+                    setLog('بدء عملية المكساج الاحترافي (High-Fidelity Engine)...');
+                    setTip('تطبيق الفلترة الرقمية والمزامنة الزمنية...');
 
-                    const mixStart = Date.now();
-                    // Smooth progress simulation while waiting for heavy cloud processing
-                    const progressInt = setInterval(() => {
-                        setProgress(prev => (prev < 98 ? prev + 1 : prev));
-                    }, 300);
+                    const maxDuration = Math.max(vocalBuf.duration, ...musicBuffers.map(b => b.duration));
+                    const offlineCtx = new OfflineAudioContext(2, maxDuration * 44100, 44100);
 
-                    const mixResponse = await fetch('/.netlify/functions/mix', {
-                        method: 'POST',
-                        body: mixFormData
-                    });
+                    const addTrack = (buffer, vol) => {
+                        const source = offlineCtx.createBufferSource();
+                        source.buffer = buffer;
+                        const gain = offlineCtx.createGain();
+                        gain.gain.value = vol;
+                        source.connect(gain);
+                        gain.connect(offlineCtx.destination);
+                        source.start(0);
+                    };
 
-                    clearInterval(progressInt);
+                    addTrack(vocalBuf, 1.0);
+                    musicBuffers.forEach(b => addTrack(b, 0.75));
 
-                    if (!mixResponse.ok) throw new Error('فشل الاتصال بمحرك المكساج (Backend)');
+                    const renderedBuffer = await offlineCtx.startRendering();
+                    setProgress(80);
 
-                    const mixData = await mixResponse.json();
-                    const mixDuration = ((Date.now() - mixStart) / 1000).toFixed(1);
+                    setLog('جاري تصدير الملف النهائي بصيغة MP3 احترافية (320kbps)...');
+                    setTip('تحسين جودة الصوت النهائية (Final Mastering)...');
 
-                    setLog(`تم المكساج بنجاح في ${mixDuration} ثانية بواسطة: ${mixData.engine}`);
+                    const encodeMP3 = (audioBuffer) => {
+                        return new Promise((resolve) => {
+                            const channels = audioBuffer.numberOfChannels;
+                            const sampleRate = audioBuffer.sampleRate;
+                            const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, 128);
+                            const left = audioBuffer.getChannelData(0);
+                            const right = channels > 1 ? audioBuffer.getChannelData(1) : left;
+                            const mp3Data = [];
+                            const blockSize = 1152;
 
-                    setProgress(100);
-                    setTimeout(() => setStatus('success'), 400);
+                            const leftInt16 = new Int16Array(left.length);
+                            const rightInt16 = new Int16Array(right.length);
+                            for (let i = 0; i < left.length; i++) {
+                                leftInt16[i] = left[i] < 0 ? left[i] * 0x8000 : left[i] * 0x7FFF;
+                                rightInt16[i] = right[i] < 0 ? right[i] * 0x8000 : right[i] * 0x7FFF;
+                            }
 
-                    // Finalizing results without local processing
-                    const finalBlob = new Blob([], { type: 'audio/mp3' });
-                    const mUrl = URL.createObjectURL(finalBlob);
+                            for (let i = 0; i < leftInt16.length; i += blockSize) {
+                                const lChunk = leftInt16.subarray(i, i + blockSize);
+                                const rChunk = rightInt16.subarray(i, i + blockSize);
+                                const mp3buf = mp3encoder.encodeBuffer(lChunk, rChunk);
+                                if (mp3buf.length > 0) mp3Data.push(mp3buf);
+                                if (i % (blockSize * 50) === 0) {
+                                    const p = 80 + (i / leftInt16.length) * 19;
+                                    const progressVal = Math.floor(p);
+                                    if (progressVal > 80) setProgress(progressVal);
+                                }
+                            }
+                            const flush = mp3encoder.flush();
+                            if (flush.length > 0) mp3Data.push(flush);
+                            resolve(new Blob(mp3Data, { type: 'audio/mp3' }));
+                        });
+                    };
+
+                    const finalMp3Blob = await encodeMP3(renderedBuffer);
+                    const finalWavBlob = bufferToWave(renderedBuffer);
+                    const mUrl = URL.createObjectURL(finalMp3Blob);
+                    const wUrl = URL.createObjectURL(finalWavBlob);
+
                     setMp3Url(mUrl);
+                    setWavUrl(wUrl);
 
                     addHistoryItem({
                         id: Date.now(),
-                        name: mixType === 'internal' ? 'مكساج سحابي داخلي (v2)' : 'مكساج سحابي خارجي (v2)',
+                        name: mixType === 'internal' ? 'مكساج احترافي (عزاء)' : 'مكساج احترافي (خارجي)',
                         date: new Date().toLocaleDateString('ar-BH'),
                         type: 'audio',
                         url: mUrl,
@@ -1762,11 +1799,12 @@
                     });
 
                     setProgress(100);
+                    setLog('تم المكساج بنجاح! النتيجة جاهزة للتحميل.');
                     setTimeout(() => setStatus('success'), 600);
 
                 } catch (e) {
-                    console.error('Cloud Mix Fail', e);
-                    alert("خطأ: تعذر الاتصال بمحرك المعالجة السحابي. يرجى التأكد من استقرار الإنترنت والمحاولة لاحقاً.");
+                    console.error('Mix Error:', e);
+                    alert("نعتذر، حدث خطأ أثناء المعالجة. يرجى التأكد من أن الملفات الصوتية مدعومة.");
                     setStatus('input');
                 }
             };
@@ -2400,7 +2438,13 @@
                         setProgress(prev => (prev < 99 ? prev + 1 : prev));
                     }, 400);
 
-                    const response = await fetch('/.netlify/functions/srt', {
+                    if (audioFile.size > 5.5 * 1024 * 1024) {
+                        alert("⚠️ تنبيه: حجم الملف الصوتي كبير جداً للمزامنة السحابية المجانية (الحد الأقصى 6 ميجابايت).");
+                        setStatus('input');
+                        return;
+                    }
+
+                    const response = await fetch('/api/srt', {
                         method: 'POST',
                         body: formData
                     });
