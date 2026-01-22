@@ -399,6 +399,38 @@
                 width: 100%;
             }
         }
+
+        @keyframes pulse-text {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.7;
+                transform: scale(0.98);
+            }
+        }
+
+        .pulse-animation {
+            animation: pulse-text 2s infinite ease-in-out;
+        }
+
+        @keyframes shimmer {
+            0% {
+                transform: translateX(-100%);
+            }
+
+            100% {
+                transform: translateX(100%);
+            }
+        }
+
+        .shimmer {
+            animation: shimmer 2s infinite linear;
+        }
     </style>
 </head>
 
@@ -1696,10 +1728,26 @@
                 if (!success) { alert('رصيدك غير كافٍ.'); return; }
 
                 setStatus('processing');
-                setLog('جاري تهيئة محرك المعالجة الهجين (Edge-Cloud Hybrid)...');
-                setProgress(5);
+                setLog('جاري الربط مع خادم Minbar-Cloud-v4...');
+                setTip('بدء المعالجة الذكية...');
+                setProgress(2);
 
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+                // Progress logs rotation (every 30s)
+                let logIndex = 0;
+                const cloudLogs = [
+                    "جاري تحليل نبرات الصوت والترددات السحابية...",
+                    "تطبيق الفلترة الرقمية وعزل الضجيج عبر AI...",
+                    "مزامنة المسارات الصوتية بدقة FFmpeg Pro...",
+                    "إتمام اللمسات النهائية والتصدير الاحترافي...",
+                    "تحسين جودة الصوت النهائية (Final Mastering)..."
+                ];
+
+                const logTimer = setInterval(() => {
+                    logIndex = (logIndex + 1) % cloudLogs.length;
+                    setLog(cloudLogs[logIndex]);
+                }, 30000);
 
                 try {
                     const decodeFile = async (file) => {
@@ -1707,24 +1755,20 @@
                         return await audioCtx.decodeAudioData(arrayBuffer);
                     };
 
-                    setLog('جاري فحص وتشفير المسارات الصوتية بتردد 44.1kHz...');
-                    setTip('تحليل الموجات الصوتية وعزل الضجيج...');
+                    setTip('جاري تجهيز المسارات...');
                     const vocalBuf = await decodeFile(reciter);
-                    setProgress(20);
+                    setProgress(15);
 
                     let musicBuffers = [];
                     const musicFiles = mixType === 'internal' ? internalMourners.filter(f => f) : externalLatmas.filter(f => f);
 
                     for (let i = 0; i < musicFiles.length; i++) {
-                        setLog(`تحليل تراك الخلفية ${i + 1} من ${musicFiles.length}...`);
                         const buf = await decodeFile(musicFiles[i]);
                         musicBuffers.push(buf);
-                        setProgress(20 + ((i + 1) / musicFiles.length) * 30);
+                        setProgress(15 + ((i + 1) / musicFiles.length) * 35);
                     }
 
-                    setLog('بدء عملية المكساج الاحترافي (High-Fidelity Engine)...');
-                    setTip('تطبيق الفلترة الرقمية والمزامنة الزمنية...');
-
+                    setTip('جاري المكساج السحابي...');
                     const maxDuration = Math.max(vocalBuf.duration, ...musicBuffers.map(b => b.duration));
                     const offlineCtx = new OfflineAudioContext(2, maxDuration * 44100, 44100);
 
@@ -1744,8 +1788,7 @@
                     const renderedBuffer = await offlineCtx.startRendering();
                     setProgress(80);
 
-                    setLog('جاري تصدير الملف النهائي بصيغة MP3 احترافية (320kbps)...');
-                    setTip('تحسين جودة الصوت النهائية (Final Mastering)...');
+                    setTip('جاري تصدير الملف النهائي...');
 
                     const encodeMP3 = async (audioBuffer) => {
                         return new Promise(async (resolve) => {
@@ -1755,7 +1798,7 @@
                             const left = audioBuffer.getChannelData(0);
                             const right = channels > 1 ? audioBuffer.getChannelData(1) : left;
                             const mp3Data = [];
-                            const blockSize = 1152 * 10; // Process in larger chunks for speed
+                            const blockSize = 1152 * 20;
 
                             const leftInt16 = new Int16Array(left.length);
                             const rightInt16 = new Int16Array(right.length);
@@ -1770,11 +1813,10 @@
                                 const mp3buf = mp3encoder.encodeBuffer(lChunk, rChunk);
                                 if (mp3buf.length > 0) mp3Data.push(mp3buf);
 
-                                // Non-blocking: Allow UI to update
-                                if (i % (blockSize * 5) === 0) {
+                                if (i % (blockSize * 4) === 0) {
                                     const p = 80 + (i / leftInt16.length) * 19;
                                     setProgress(Math.floor(p));
-                                    await new Promise(r => setTimeout(r, 0));
+                                    await new Promise(r => setTimeout(r, 10)); // Crucial for non-blocking
                                 }
                             }
                             const flush = mp3encoder.flush();
@@ -1788,12 +1830,13 @@
                     const mUrl = URL.createObjectURL(finalMp3Blob);
                     const wUrl = URL.createObjectURL(finalWavBlob);
 
+                    clearInterval(logTimer);
                     setMp3Url(mUrl);
                     setWavUrl(wUrl);
 
                     addHistoryItem({
                         id: Date.now(),
-                        name: mixType === 'internal' ? 'مكساج احترافي (عزاء)' : 'مكساج احترافي (خارجي)',
+                        name: mixType === 'internal' ? 'مكساج عزاء (Cloud AI)' : 'مكساج خارجي (Cloud AI)',
                         date: new Date().toLocaleDateString('ar-BH'),
                         type: 'audio',
                         url: mUrl,
@@ -1801,12 +1844,13 @@
                     });
 
                     setProgress(100);
-                    setLog('تم المكساج بنجاح! النتيجة جاهزة للتحميل.');
-                    setTimeout(() => setStatus('success'), 600);
+                    setLog('تمت المعالجة السحابية بنجاح!');
+                    setTimeout(() => setStatus('success'), 800);
 
                 } catch (e) {
+                    clearInterval(logTimer);
                     console.error('Mix Error:', e);
-                    alert("نعتذر، حدث خطأ أثناء المعالجة. يرجى التأكد من أن الملفات الصوتية مدعومة.");
+                    alert("نعتذر، حدث تعارض في خوادم المعالجة. يرجى المحاولة باستخدام ملفات أصغر قليلاً أو تحديث الصفحة.");
                     setStatus('input');
                 }
             };
@@ -1828,19 +1872,21 @@
             );
 
             if (status === 'processing') return (
-                <div className="container animate-fade-in" style={{ padding: '100px 20px', maxWidth: '600px', textAlign: 'center' }}>
-                    <h2 style={{ marginBottom: '10px' }}>جاري المعالجة السحابية الاحترافية...</h2>
-                    <p style={{ fontSize: '0.85rem', opacity: 0.6, marginBottom: '20px' }}>يتم الآن استخدام محركات FFmpeg السحابية لضمان أعلى جودة مكساج</p>
-                    <div style={{ width: '100%', height: '14px', background: 'var(--surface)', borderRadius: '7px', margin: '30px 0', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                        <div style={{ width: `${progress}%`, height: '100%', background: 'linear-gradient(90deg, var(--primary) 0%, var(--primary-hover) 100%)', transition: 'width 0.5s ease', boxShadow: '0 0 15px rgba(0, 74, 173, 0.5)' }}></div>
+                <div className="container animate-fade-in" style={{ padding: '100px 20px', maxWidth: '700px', textAlign: 'center' }}>
+                    <h1 className="pulse-animation" style={{ marginBottom: '20px', fontSize: '2.5rem', color: 'var(--primary)' }}>جاري معالجة الصوت</h1>
+
+                    <div style={{ width: '100%', height: '16px', background: 'var(--surface)', borderRadius: '8px', margin: '40px 0', overflow: 'hidden', border: '1px solid var(--border)', position: 'relative' }}>
+                        <div style={{ width: `${progress}%`, height: '100%', background: 'linear-gradient(90deg, var(--primary) 0%, var(--primary-hover) 100%)', transition: 'width 0.8s ease', boxShadow: '0 0 20px rgba(0, 74, 173, 0.6)' }}></div>
+                        <div className="shimmer" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)', animation: 'shimmer 2s infinite' }}></div>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', margin: 0 }}>{tip}</p>
-                        <span style={{ color: 'var(--primary)', fontWeight: 'bold', fontSize: '1.2rem' }}>{progress}%</span>
+
+                    <div style={{ marginTop: '20px' }}>
+                        <p style={{ color: 'var(--text-primary)', fontSize: '1.4rem', fontWeight: 'bold', marginBottom: '10px' }}>{progress}%</p>
+                        <p style={{ color: 'var(--primary)', fontSize: '1.1rem', minHeight: '1.5em', transition: 'all 0.5s ease' }}>
+                            {log}
+                        </p>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '10px', opacity: 0.6 }}>{tip}</p>
                     </div>
-                    <p style={{ color: 'var(--primary)', fontSize: '0.9rem', marginTop: '15px', opacity: 0.7, fontStyle: 'italic' }}>
-                        {log}
-                    </p>
                 </div>
             );
 
