@@ -1542,6 +1542,36 @@
                 if (window.innerWidth <= 768) push('/dashboard');
             }, [user, loading, push]);
 
+            // --- Navigation Safety ---
+            useEffect(() => {
+                const handleBeforeUnload = (e) => {
+                    if (status === 'processing') {
+                        e.preventDefault();
+                        e.returnValue = '';
+                    }
+                };
+                window.addEventListener('beforeunload', handleBeforeUnload);
+                return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+            }, [status]);
+
+            const safeBack = () => {
+                if (status === 'processing') {
+                    if (confirm("هل أنت متأكد من إلغاء العملية والعودة؟ سيتم فقدان التقدم الحالي.")) {
+                        setStatus('input');
+                        setMixType(null);
+                    }
+                } else {
+                    setMixType(null);
+                    setStatus('input');
+                }
+            };
+
+            const BackButton = () => (
+                <button onClick={safeBack} className="btn btn-outline" style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>→</span> {t('btn_back')}
+                </button>
+            );
+
             if (loading || !user) return null;
 
             // Handlers
@@ -1725,10 +1755,17 @@
                     mixFormData.append('mixType', mixType);
 
                     const mixStart = Date.now();
+                    // Smooth progress simulation while waiting for heavy cloud processing
+                    const progressInt = setInterval(() => {
+                        setProgress(prev => (prev < 85 ? prev + 1 : prev));
+                    }, 500);
+
                     const mixResponse = await fetch('/.netlify/functions/mix', {
                         method: 'POST',
                         body: mixFormData
                     });
+
+                    clearInterval(progressInt);
 
                     if (!mixResponse.ok) throw new Error('فشل الاتصال بمحرك المكساج (Backend)');
 
@@ -1780,10 +1817,10 @@
 
             if (status === 'processing') return (
                 <div className="container animate-fade-in" style={{ padding: '100px 20px', maxWidth: '600px', textAlign: 'center' }}>
-                    <h2 style={{ marginBottom: '10px' }}>جاري المزامنة الصوتية (النمط الاقتصادي)...</h2>
-                    <p style={{ fontSize: '0.85rem', opacity: 0.6, marginBottom: '20px' }}>تم تفعيل نمط المعالجة الخفيفة لتقليل الضغط على جهازك</p>
+                    <h2 style={{ marginBottom: '10px' }}>جاري المعالجة السحابية الاحترافية...</h2>
+                    <p style={{ fontSize: '0.85rem', opacity: 0.6, marginBottom: '20px' }}>يتم الآن استخدام محركات FFmpeg السحابية لضمان أعلى جودة مكساج</p>
                     <div style={{ width: '100%', height: '14px', background: 'var(--surface)', borderRadius: '7px', margin: '30px 0', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                        <div style={{ width: `${progress}%`, height: '100%', background: 'linear-gradient(90deg, var(--primary) 0%, var(--primary-hover) 100%)', transition: 'width 20s linear', boxShadow: '0 0 15px rgba(212, 175, 55, 0.5)' }}></div>
+                        <div style={{ width: `${progress}%`, height: '100%', background: 'linear-gradient(90deg, var(--primary) 0%, var(--primary-hover) 100%)', transition: 'width 0.5s ease', boxShadow: '0 0 15px rgba(0, 74, 173, 0.5)' }}></div>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', margin: 0 }}>{tip}</p>
@@ -2427,7 +2464,7 @@
             return (
                 <div className="container animate-fade-in" style={{ padding: '20px', maxWidth: '1200px' }}>
                     <div style={{ display: 'flex', gap: '20px', alignItems: 'center', marginBottom: '30px' }}>
-                        <BackButton />
+                        <BackButtonSRT />
                         <h2 style={{ margin: 0 }}>📜 {t('tools_srt')}</h2>
                     </div>
 
@@ -2500,15 +2537,15 @@
 
                             {status === 'processing' && (
                                 <div style={{ width: '100%', textAlign: 'center' }}>
-                                    <h3 style={{ marginBottom: '30px' }}>جاري التحليل والمزامنة (أدنى استهلاك للموارد)...</h3>
+                                    <h3 style={{ marginBottom: '30px' }}>جاري المعالجة والمزامنة السحابية...</h3>
                                     <div style={{ width: '100%', height: '10px', background: 'var(--surface)', borderRadius: '5px', overflow: 'hidden', marginBottom: '20px', border: '1px solid var(--border)' }}>
-                                        <div style={{ width: `${progress}%`, height: '100%', background: 'linear-gradient(90deg, var(--primary) 0%, var(--primary-hover) 100%)', transition: 'width 15s linear' }}></div>
+                                        <div style={{ width: `${progress}%`, height: '100%', background: 'linear-gradient(90deg, var(--primary) 0%, var(--primary-hover) 100%)', transition: 'width 0.4s ease' }}></div>
                                     </div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
                                         <span>{log}</span>
                                         <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{progress}%</span>
                                     </div>
-                                    <p style={{ fontSize: '0.8rem', marginTop: '20px', opacity: 0.6 }}>تم تخفيف حمل المعالجة لتناسب جهازك</p>
+                                    <p style={{ fontSize: '0.8rem', marginTop: '20px', opacity: 0.6 }}>يتم الآن استخدام خوارزميات الذكاء الاصطناعي للمزامنة الدقيقة</p>
                                 </div>
                             )}
 
