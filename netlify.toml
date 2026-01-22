@@ -1,5 +1,7 @@
+[build]
   publish = "public"
   functions = "netlify/functions"
+  command = "echo 'Static site ready'"
 
 [[redirects]]
   from = "/api/*"
