@@ -1747,15 +1747,15 @@
                     setLog('جاري تصدير الملف النهائي بصيغة MP3 احترافية (320kbps)...');
                     setTip('تحسين جودة الصوت النهائية (Final Mastering)...');
 
-                    const encodeMP3 = (audioBuffer) => {
-                        return new Promise((resolve) => {
+                    const encodeMP3 = async (audioBuffer) => {
+                        return new Promise(async (resolve) => {
                             const channels = audioBuffer.numberOfChannels;
                             const sampleRate = audioBuffer.sampleRate;
                             const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, 128);
                             const left = audioBuffer.getChannelData(0);
                             const right = channels > 1 ? audioBuffer.getChannelData(1) : left;
                             const mp3Data = [];
-                            const blockSize = 1152;
+                            const blockSize = 1152 * 10; // Process in larger chunks for speed
 
                             const leftInt16 = new Int16Array(left.length);
                             const rightInt16 = new Int16Array(right.length);
@@ -1769,10 +1769,12 @@
                                 const rChunk = rightInt16.subarray(i, i + blockSize);
                                 const mp3buf = mp3encoder.encodeBuffer(lChunk, rChunk);
                                 if (mp3buf.length > 0) mp3Data.push(mp3buf);
-                                if (i % (blockSize * 50) === 0) {
+
+                                // Non-blocking: Allow UI to update
+                                if (i % (blockSize * 5) === 0) {
                                     const p = 80 + (i / leftInt16.length) * 19;
-                                    const progressVal = Math.floor(p);
-                                    if (progressVal > 80) setProgress(progressVal);
+                                    setProgress(Math.floor(p));
+                                    await new Promise(r => setTimeout(r, 0));
                                 }
                             }
                             const flush = mp3encoder.flush();
