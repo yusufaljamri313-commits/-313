@@ -1542,36 +1542,6 @@
                 if (window.innerWidth <= 768) push('/dashboard');
             }, [user, loading, push]);
 
-            // --- Navigation Safety ---
-            useEffect(() => {
-                const handleBeforeUnload = (e) => {
-                    if (status === 'processing') {
-                        e.preventDefault();
-                        e.returnValue = '';
-                    }
-                };
-                window.addEventListener('beforeunload', handleBeforeUnload);
-                return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-            }, [status]);
-
-            const safeBack = () => {
-                if (status === 'processing') {
-                    if (confirm("هل أنت متأكد من إلغاء العملية والعودة؟ سيتم فقدان التقدم الحالي.")) {
-                        setStatus('input');
-                        setMixType(null);
-                    }
-                } else {
-                    setMixType(null);
-                    setStatus('input');
-                }
-            };
-
-            const BackButton = () => (
-                <button onClick={safeBack} className="btn btn-outline" style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span>→</span> {t('btn_back')}
-                </button>
-            );
-
             if (loading || !user) return null;
 
             // Handlers
@@ -1757,8 +1727,8 @@
                     const mixStart = Date.now();
                     // Smooth progress simulation while waiting for heavy cloud processing
                     const progressInt = setInterval(() => {
-                        setProgress(prev => (prev < 85 ? prev + 1 : prev));
-                    }, 500);
+                        setProgress(prev => (prev < 98 ? prev + 1 : prev));
+                    }, 300);
 
                     const mixResponse = await fetch('/.netlify/functions/mix', {
                         method: 'POST',
@@ -1773,7 +1743,9 @@
                     const mixDuration = ((Date.now() - mixStart) / 1000).toFixed(1);
 
                     setLog(`تم المكساج بنجاح في ${mixDuration} ثانية بواسطة: ${mixData.engine}`);
-                    setProgress(90);
+
+                    setProgress(100);
+                    setTimeout(() => setStatus('success'), 400);
 
                     // Finalizing results without local processing
                     const finalBlob = new Blob([], { type: 'audio/mp3' });
@@ -2424,17 +2396,24 @@
                     setProgress(40);
 
                     const startTime = Date.now();
+                    const progressInt = setInterval(() => {
+                        setProgress(prev => (prev < 99 ? prev + 1 : prev));
+                    }, 400);
+
                     const response = await fetch('/.netlify/functions/srt', {
                         method: 'POST',
                         body: formData
                     });
+
+                    clearInterval(progressInt);
 
                     if (!response.ok) throw new Error('فشل الاتصال بمركز المزامنة السحابي (Backend Error)');
 
                     const data = await response.json();
 
                     setLog(`استلام النتيجة النهائية من المحرك السحابي بنجاح.`);
-                    setProgress(90);
+                    setProgress(100);
+                    setTimeout(() => setStatus('success'), 400);
 
                     const blob = new Blob([data.srt], { type: 'text/plain;charset=utf-8' });
                     const url = URL.createObjectURL(blob);
@@ -2464,7 +2443,7 @@
             return (
                 <div className="container animate-fade-in" style={{ padding: '20px', maxWidth: '1200px' }}>
                     <div style={{ display: 'flex', gap: '20px', alignItems: 'center', marginBottom: '30px' }}>
-                        <BackButtonSRT />
+                        <BackButton />
                         <h2 style={{ margin: 0 }}>📜 {t('tools_srt')}</h2>
                     </div>
 
