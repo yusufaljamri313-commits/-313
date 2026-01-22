@@ -1725,7 +1725,7 @@
                     mixFormData.append('mixType', mixType);
 
                     const mixStart = Date.now();
-                    const mixResponse = await fetch('/api/mix', {
+                    const mixResponse = await fetch('/.netlify/functions/mix', {
                         method: 'POST',
                         body: mixFormData
                     });
@@ -1757,7 +1757,7 @@
 
                 } catch (e) {
                     console.error('Cloud Mix Fail', e);
-                    alert("خطأ: تعذر الاتصال بالسيرفر. إذا كنت تفتح الملف بمسار Path، فيجب تشغيل npm run dev وفتح الموقع عبر http://localhost:3000 ليعمل الربط السحابي.");
+                    alert("خطأ: تعذر الاتصال بمحرك المعالجة السحابي. يرجى التأكد من استقرار الإنترنت والمحاولة لاحقاً.");
                     setStatus('input');
                 }
             };
@@ -2387,7 +2387,7 @@
                     setProgress(40);
 
                     const startTime = Date.now();
-                    const response = await fetch('/api/srt', {
+                    const response = await fetch('/.netlify/functions/srt', {
                         method: 'POST',
                         body: formData
                     });
@@ -2417,7 +2417,7 @@
 
                 } catch (e) {
                     console.error("Cloud SRT Error", e);
-                    alert("خطأ: فشل إرسال الملف لمركز المزامنة. تأكد من تشغيل المشروع عبر التيرمينال (npm run dev) لتفعيل السيرفر السحابي.");
+                    alert("خطأ: تعذر الوصول لمركز المزامنة السحابي. يرجى المحاولة مرة أخرى.");
                     setStatus('input');
                 }
             };
