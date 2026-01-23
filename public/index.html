@@ -1725,8 +1725,8 @@
 
                 setStatus('processing');
                 setProgress(0);
-                setLog('جاري الاتصال بمركز المعالجة السحابي (Cloud Engine v5)...');
-                setTip('تهيئة ميكسر Adobe Audition الذكي...');
+                setLog('يتم الآن الاتصال بمركز المعالجة السحابي (Cloud Engine v7)...');
+                setTip('تهيئة بيئة المعالجة السلسة (Anti-Lag Mode)...');
 
                 // --- Steady 3-Minute Progress (1.8s per 1%) ---
                 let currentP = 0;
@@ -1758,8 +1758,8 @@
                     for (let f of musicFiles) if (f) mournerBuffers.push(await decode(f));
 
                     const maxDur = Math.max(vocalBuf.duration, ...mournerBuffers.map(b => b.duration));
-                    // 1 Channel (Mono) + 32kHz for <300MB RAM safety
-                    const offCtx = new OfflineAudioContext(1, maxDur * 32000, 32000);
+                    // 24kHz Mono is the Sweet Spot: High quality + Under 300MB RAM
+                    const offCtx = new OfflineAudioContext(1, maxDur * 24000, 24000);
 
                     // --- Professional Reciter Chain (Audition Specs) ---
                     const vSource = offCtx.createBufferSource();
@@ -1810,22 +1810,26 @@
                     vocalBuf = null;
                     mournerBuffers = [];
 
-                    // Steady Low-RAM MP3 Encoding (Mono / 32kHz)
+                    // Smooth Anti-Lag Encoding (Mono / 24kHz)
                     const mp3Blob = await (new Promise(async (res) => {
-                        const encoder = new lamejs.Mp3Encoder(1, 32000, 128);
+                        const encoder = new lamejs.Mp3Encoder(1, 24000, 128);
                         const samples = rendered.getChannelData(0);
                         const mp3chunks = [];
-                        const bSize = 1152 * 50;
+                        const bSize = 1152 * 20; // Smaller chunks for better UI responsiveness
 
                         for (let i = 0; i < samples.length; i += bSize) {
-                            const chunkI16 = new Int16Array(bSize);
-                            for (let j = 0; j < bSize && i + j < samples.length; j++) {
-                                chunkI16[j] = samples[i + j] < 0 ? samples[i + j] * 0x8000 : samples[i + j] * 0x7FFF;
+                            const chunkI16 = new Int16Array(Math.min(bSize, samples.length - i));
+                            for (let j = 0; j < chunkI16.length; j++) {
+                                const s = samples[i + j];
+                                chunkI16[j] = s < 0 ? s * 0x8000 : s * 0x7FFF;
                             }
                             const mp3b = encoder.encodeBuffer(chunkI16);
                             if (mp3b.length > 0) mp3chunks.push(mp3b);
-                            // Yield to Garbage Collector frequently
-                            if (i % (bSize * 5) === 0) await new Promise(r => setTimeout(r, 0));
+
+                            // IMPORTANT: Yield to UI every batch to prevent "freezing"
+                            if (i % (bSize * 2) === 0) {
+                                await new Promise(r => setTimeout(r, 0));
+                            }
                         }
                         const final = encoder.flush();
                         if (final.length > 0) mp3chunks.push(final);
@@ -1833,7 +1837,7 @@
                     }));
 
                     const resUrl = URL.createObjectURL(mp3Blob);
-                    clearInterval(progressInterval);
+                    if (progressInterval) clearInterval(progressInterval);
                     setMp3Url(resUrl); setProgress(100); setStatus('success');
 
                     addHistoryItem({
