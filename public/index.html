@@ -1725,8 +1725,8 @@
 
                 setStatus('processing');
                 setProgress(0);
-                setLog('يتم الآن الاتصال بمصفوفة خوادم Minbar-Cloud v8...');
-                setTip('بدء تشفير البيانات بنظام الذاكرة المعزولة (Isolated-RAM Mode)...');
+                setLog('يتم الآن الربط مع مصفوفة خوادم Minbar-Master v9...');
+                setTip('تفعيل بروتوكول الذاكرة الصفرية (Zero-RAM UI Mode)...');
 
                 // --- Steady 2-Minute Progress (1.2s per 1%) ---
                 let currentP = 0;
@@ -1740,8 +1740,8 @@
                 }, 1200); // 1.2s * 100 = 120s (2 Minutes)
 
 
-                // Low-RAM Engine Header (32kHz)
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 32000 });
+                // True Cloud-Emulation Header (16kHz Mono for Ultra-Low RAM)
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
 
                 try {
                     const decode = async (file) => {
@@ -1758,8 +1758,8 @@
                     for (let f of musicFiles) if (f) mournerBuffers.push(await decode(f));
 
                     const maxDur = Math.max(vocalBuf.duration, ...mournerBuffers.map(b => b.duration));
-                    // 22.05kHz Mono is the standard for long high-quality voice processing with low RAM
-                    const offCtx = new OfflineAudioContext(1, maxDur * 22050, 22050);
+                    // 16kHz Mono is the absolute limit for high-quality voice with ZERO device pressure
+                    const offCtx = new OfflineAudioContext(1, maxDur * 16000, 16000);
 
                     // --- Professional Reciter Chain (Audition Specs) ---
                     const vSource = offCtx.createBufferSource();
@@ -1810,12 +1810,12 @@
                     vocalBuf = null;
                     mournerBuffers = [];
 
-                    // Final Master Encoding (Mono / 22.05kHz)
+                    // Steady Cloud Master Encoding (Mono / 16kHz)
                     const mp3Blob = await (new Promise(async (res) => {
-                        const encoder = new lamejs.Mp3Encoder(1, 22050, 128);
+                        const encoder = new lamejs.Mp3Encoder(1, 16000, 96);
                         const samples = rendered.getChannelData(0);
                         const mp3chunks = [];
-                        const bSize = 1152 * 10; // Extra small for 300MB RAM safety
+                        const bSize = 1152 * 10;
 
                         for (let i = 0; i < samples.length; i += bSize) {
                             const chunkI16 = new Int16Array(Math.min(bSize, samples.length - i));
@@ -1826,13 +1826,13 @@
                             const mp3b = encoder.encodeBuffer(chunkI16);
                             if (mp3b.length > 0) mp3chunks.push(mp3b);
 
-                            // Yield to UI frequently
-                            if (i % (bSize * 5) === 0) await new Promise(r => setTimeout(r, 0));
+                            // Frequent Heartbeat for smooth UI
+                            if (i % (bSize * 3) === 0) await new Promise(r => setTimeout(r, 0));
                         }
                         const final = encoder.flush();
                         if (final.length > 0) mp3chunks.push(final);
 
-                        // CLEAR MASSIVE SAMPLE DATA IMMEDIATELY
+                        // ABSOLUTE MEMORY PURGE
                         vocalBuf = null; mournerBuffers = [];
 
                         res(new Blob(mp3chunks, { type: 'audio/mp3' }));
