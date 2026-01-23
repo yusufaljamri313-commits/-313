@@ -1762,69 +1762,50 @@
                     const maxDur = Math.max(vocalBuf.duration, ...mournerBuffers.map(b => b.duration));
                     const offCtx = new OfflineAudioContext(1, Math.ceil(maxDur * 16000), 16000);
 
-                    // --- 1. LEAD VOCAL CHAIN (Adobe Audition Specs) ---
-                    const vSource = offCtx.createBufferSource();
-                    vSource.buffer = vocalBuf;
+                    // --- 1. SHARED SLAP CHAIN (Consistent High-RAM Performance) ---
+                    const mEqL = offCtx.createBiquadFilter(); mEqL.type = 'peaking'; mEqL.frequency.value = 80; mEqL.gain.value = 6.0;
+                    const mEqH = offCtx.createBiquadFilter(); mEqH.type = 'peaking'; mEqH.frequency.value = 2500; mEqH.gain.value = 3.0;
+                    const mLimit = offCtx.createDynamicsCompressor(); mLimit.threshold.value = -0.1; mLimit.ratio.value = 20;
+                    const mBoost = offCtx.createGain(); mBoost.gain.value = 1.58;
+                    const mEcho = offCtx.createDelay(1.0); mEcho.delayTime.value = 0.52;
+                    const mEFbk = offCtx.createGain(); mEFbk.gain.value = 0.15;
+                    const mEWet = offCtx.createGain(); mEWet.gain.value = 0.25;
+                    const mRevWet = offCtx.createGain(); mRevWet.gain.value = 0.45;
+                    const mRevDelay = offCtx.createDelay(1.0); mRevDelay.delayTime.value = 0.1;
 
-                    // A. Parametric EQ ( تنقية النبرة)
-                    const vHP = offCtx.createBiquadFilter(); vHP.type = 'highpass'; vHP.frequency.value = 100;
-                    const vBass = offCtx.createBiquadFilter(); vBass.type = 'peaking'; vBass.frequency.value = 180; vBass.gain.value = 2.5; vBass.Q.value = 1.5;
-                    const vHigh = offCtx.createBiquadFilter(); vHigh.type = 'peaking'; vHigh.frequency.value = 6000; vHigh.gain.value = 3.5;
+                    // Slap Node Connections
+                    mEcho.connect(mEFbk); mEFbk.connect(mEcho);
+                    mEqL.connect(mEqH); mEqH.connect(mBoost); mBoost.connect(mLimit);
+                    mLimit.connect(offCtx.destination);
+                    mLimit.connect(mEcho); mEcho.connect(mEWet); mEWet.connect(offCtx.destination);
+                    mLimit.connect(mRevDelay); mRevDelay.connect(mRevWet); mRevWet.connect(offCtx.destination);
 
-                    // B. Dynamics Processing ( Settings: -18dB, 3:1)
-                    const vComp = offCtx.createDynamicsCompressor();
-                    vComp.threshold.value = -18; vComp.ratio.value = 3; vComp.attack.value = 0.005; vComp.release.value = 0.1;
-
-                    // C. Analog Delay ( 480ms / 22% Fbk)
-                    const vDelay = offCtx.createDelay(1.0); vDelay.delayTime.value = 0.48;
-                    const vFbk = offCtx.createGain(); vFbk.gain.value = 0.22;
-                    const vDelayWet = offCtx.createGain(); vDelayWet.gain.value = 0.18;
-                    vDelay.connect(vFbk); vFbk.connect(vDelay);
-
-                    // D. Studio Reverb ( Simulated 2.8s)
-                    const vRevWet = offCtx.createGain(); vRevWet.gain.value = 0.20;
-                    const vRevDelay = offCtx.createDelay(1.0); vRevDelay.delayTime.value = 0.08; // Early reflections 
-
-                    // Routing Vocals
-                    vSource.connect(vHP); vHP.connect(vBass); vBass.connect(vHigh); vHigh.connect(vComp);
-                    vComp.connect(offCtx.destination); // Dry 100%
-                    vComp.connect(vDelay); vDelay.connect(vDelayWet); vDelayWet.connect(offCtx.destination);
-                    vComp.connect(vRevDelay); vRevDelay.connect(vRevWet); vRevWet.push ? null : vRevWet.connect(offCtx.destination);
-
-                    // --- 2. THE SLAP CHAIN (رخيمة وضخمة) ---
                     mournerBuffers.forEach(b => {
                         const mSource = offCtx.createBufferSource();
                         mSource.buffer = b;
-
-                        // A. EQ Boost (80Hz Bass + 2.5kHz Contact)
-                        const mEqL = offCtx.createBiquadFilter(); mEqL.type = 'peaking'; mEqL.frequency.value = 80; mEqL.gain.value = 6.0;
-                        const mEqH = offCtx.createBiquadFilter(); mEqH.type = 'peaking'; mEqH.frequency.value = 2500; mEqH.gain.value = 3.0;
-
-                        // B. Hard Limiter (Input Boost 4dB / Max -0.1dB)
-                        const mLimit = offCtx.createDynamicsCompressor();
-                        mLimit.threshold.value = -0.1; mLimit.ratio.value = 20;
-                        const mBoost = offCtx.createGain(); mBoost.gain.value = 1.58; // approx 4dB boost
-
-                        // C. Echo (520ms / 15% Fbk)
-                        const mEcho = offCtx.createDelay(1.0); mEcho.delayTime.value = 0.52;
-                        const mEFbk = offCtx.createGain(); mEFbk.gain.value = 0.15;
-                        const mEWet = offCtx.createGain(); mEWet.gain.value = 0.25;
-                        mEcho.connect(mEFbk); mEFbk.connect(mEcho);
-
-                        // D. Studio Reverb (3500ms / 45% Wet)
-                        const mRevWet = offCtx.createGain(); mRevWet.gain.value = 0.45;
-                        const mRevDelay = offCtx.createDelay(1.0); mRevDelay.delayTime.value = 0.1;
-
-                        mSource.connect(mEqL); mEqL.connect(mEqH); mEqH.connect(mBoost); mBoost.connect(mLimit);
-                        mLimit.connect(offCtx.destination); // Slap Dry
-                        mLimit.connect(mEcho); mEcho.connect(mEWet); mEWet.connect(offCtx.destination);
-                        mLimit.connect(mRevDelay); mRevDelay.connect(mRevWet); mRevWet.connect(offCtx.destination);
-
+                        mSource.connect(mEqL); // All slaps flow thru the same professional chain
                         mSource.start(0);
                     });
 
-                    // --- 3. MASTER GLUE (+2dB Output) ---
-                    // Applied via a final gain node if necessary, but here we can just boost sources
+                    // --- 2. LEAD VOCAL CHAIN (Adobe Audition Specs) ---
+                    const vSource = offCtx.createBufferSource();
+                    vSource.buffer = vocalBuf;
+                    const vHP = offCtx.createBiquadFilter(); vHP.type = 'highpass'; vHP.frequency.value = 100;
+                    const vBass = offCtx.createBiquadFilter(); vBass.type = 'peaking'; vBass.frequency.value = 180; vBass.gain.value = 2.5; vBass.Q.value = 1.5;
+                    const vHigh = offCtx.createBiquadFilter(); vHigh.type = 'peaking'; vHigh.frequency.value = 6000; vHigh.gain.value = 3.5;
+                    const vComp = offCtx.createDynamicsCompressor(); vComp.threshold.value = -18; vComp.ratio.value = 3; vComp.attack.value = 0.005; vComp.release.value = 0.1;
+                    const vDelay = offCtx.createDelay(1.0); vDelay.delayTime.value = 0.48;
+                    const vFbk = offCtx.createGain(); vFbk.gain.value = 0.22;
+                    const vDelayWet = offCtx.createGain(); vDelayWet.gain.value = 0.18;
+                    const vRevWet = offCtx.createGain(); vRevWet.gain.value = 0.20;
+                    const vRevDelay = offCtx.createDelay(1.0); vRevDelay.delayTime.value = 0.08;
+
+                    vDelay.connect(vFbk); vFbk.connect(vDelay);
+                    vSource.connect(vHP); vHP.connect(vBass); vBass.connect(vHigh); vHigh.connect(vComp);
+                    vComp.connect(offCtx.destination);
+                    vComp.connect(vDelay); vDelay.connect(vDelayWet); vDelayWet.connect(offCtx.destination);
+                    vComp.connect(vRevDelay); vRevDelay.connect(vRevWet); vRevWet.connect(offCtx.destination);
+
                     vSource.start(0);
                     let rendered = await offCtx.startRendering();
 
