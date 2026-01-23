@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>مِـنـبَـر v2 - الذكاء الاصطناعي</title>
+    <title>مِـنـبَـر - الذكاء الاصطناعي</title>
     <!-- 
       IMPORTANT: This site uses Netlify Functions for cloud processing.
       Make sure to upload the 'netlify' folder and 'netlify.toml' file.
@@ -1728,31 +1728,33 @@
                 setLog('جاري الاتصال بمركز المعالجة السحابي (Cloud Engine v5)...');
                 setTip('تهيئة ميكسر Adobe Audition الذكي...');
 
-                // Professional Progress Control: 1% every 15s
+                // --- Fancy Progress Jumps Logic ---
                 let currentP = 0;
-                const pInterval = setInterval(() => {
-                    if (currentP < 99) { currentP++; setProgress(currentP); }
-                }, 15000);
+                const runProgressFlow = async () => {
+                    const updateTo = async (target, speed) => {
+                        while (currentP < target) {
+                            currentP++; setProgress(currentP);
+                            await new Promise(r => setTimeout(r, speed));
+                        }
+                    };
+                    await updateTo(10, 70);
+                    currentP = 30; setProgress(30);
+                    await updateTo(40, 100);
+                    currentP = 60; setProgress(60);
+                    await updateTo(80, 150);
+                    currentP = 95; setProgress(95);
+                };
+                runProgressFlow();
 
-                const stepMessages = [
-                    "تطبيق Parametric EQ (HP 90Hz / Clarity Boost)...",
-                    "حقن تراك الرادود بـ Studio Reverb و Analog Delay...",
-                    "معالجة Dynamics Processing (Vocal Compander)...",
-                    "تقوية اللطمة وتضخيم الترددات تحت 100Hz...",
-                    "المكساج النهائي بتطبيق Broadcast Multiband Compressor..."
-                ];
-                let msgIdx = 0;
-                const msgInterval = setInterval(() => {
-                    msgIdx = (msgIdx + 1) % stepMessages.length;
-                    setLog(stepMessages[msgIdx]);
-                }, 30000);
 
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
 
                 try {
                     const decode = async (file) => {
-                        const buffer = await file.arrayBuffer();
-                        return await audioCtx.decodeAudioData(buffer);
+                        let ab = await file.arrayBuffer();
+                        const decoded = await audioCtx.decodeAudioData(ab);
+                        ab = null;
+                        return decoded;
                     };
 
                     setTip('تحليل البصمة الصوتية...');
@@ -1809,6 +1811,10 @@
                     vSource.start(0);
                     const rendered = await offCtx.startRendering();
 
+                    // RAM Purge: Release source buffers after rendering
+                    vocalBuf = null;
+                    mournerBuffers = [];
+
                     // MP3 Encoding
                     const mp3Blob = await (new Promise(async (res) => {
                         const encoder = new lamejs.Mp3Encoder(2, 44100, 192);
@@ -1833,7 +1839,6 @@
                     }));
 
                     const resUrl = URL.createObjectURL(mp3Blob);
-                    clearInterval(pInterval); clearInterval(msgInterval);
                     setMp3Url(resUrl); setProgress(100); setStatus('success');
 
                     addHistoryItem({
