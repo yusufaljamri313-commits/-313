@@ -1728,26 +1728,20 @@
                 setLog('جاري الاتصال بمركز المعالجة السحابي (Cloud Engine v5)...');
                 setTip('تهيئة ميكسر Adobe Audition الذكي...');
 
-                // --- Fancy Progress Jumps Logic ---
+                // --- Steady 3-Minute Progress (1.8s per 1%) ---
                 let currentP = 0;
-                const runProgressFlow = async () => {
-                    const updateTo = async (target, speed) => {
-                        while (currentP < target) {
-                            currentP++; setProgress(currentP);
-                            await new Promise(r => setTimeout(r, speed));
-                        }
-                    };
-                    await updateTo(10, 70);
-                    currentP = 30; setProgress(30);
-                    await updateTo(40, 100);
-                    currentP = 60; setProgress(60);
-                    await updateTo(80, 150);
-                    currentP = 95; setProgress(95);
-                };
-                runProgressFlow();
+                const progressInterval = setInterval(() => {
+                    if (currentP < 99) {
+                        currentP++;
+                        setProgress(currentP);
+                    } else {
+                        clearInterval(progressInterval);
+                    }
+                }, 1800); // 1.8s * 100 = 180s (3 Minutes)
 
 
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+                // Low-RAM Engine Header (32kHz)
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 32000 });
 
                 try {
                     const decode = async (file) => {
@@ -1764,7 +1758,8 @@
                     for (let f of musicFiles) if (f) mournerBuffers.push(await decode(f));
 
                     const maxDur = Math.max(vocalBuf.duration, ...mournerBuffers.map(b => b.duration));
-                    const offCtx = new OfflineAudioContext(2, maxDur * 44100, 44100);
+                    // 1 Channel (Mono) + 32kHz for <300MB RAM safety
+                    const offCtx = new OfflineAudioContext(1, maxDur * 32000, 32000);
 
                     // --- Professional Reciter Chain (Audition Specs) ---
                     const vSource = offCtx.createBufferSource();
@@ -1815,30 +1810,30 @@
                     vocalBuf = null;
                     mournerBuffers = [];
 
-                    // MP3 Encoding
+                    // Steady Low-RAM MP3 Encoding (Mono / 32kHz)
                     const mp3Blob = await (new Promise(async (res) => {
-                        const encoder = new lamejs.Mp3Encoder(2, 44100, 192);
-                        const left = rendered.getChannelData(0);
-                        const right = rendered.getChannelData(1);
-                        const mp3data = [];
-                        const bSize = 1152 * 100;
+                        const encoder = new lamejs.Mp3Encoder(1, 32000, 128);
+                        const samples = rendered.getChannelData(0);
+                        const mp3chunks = [];
+                        const bSize = 1152 * 50;
 
-                        for (let i = 0; i < left.length; i += bSize) {
-                            const lChunk = new Int16Array(bSize); const rChunk = new Int16Array(bSize);
-                            for (let j = 0; j < bSize && i + j < left.length; j++) {
-                                lChunk[j] = left[i + j] < 0 ? left[i + j] * 0x8000 : left[i + j] * 0x7FFF;
-                                rChunk[j] = right[i + j] < 0 ? right[i + j] * 0x8000 : right[i + j] * 0x7FFF;
+                        for (let i = 0; i < samples.length; i += bSize) {
+                            const chunkI16 = new Int16Array(bSize);
+                            for (let j = 0; j < bSize && i + j < samples.length; j++) {
+                                chunkI16[j] = samples[i + j] < 0 ? samples[i + j] * 0x8000 : samples[i + j] * 0x7FFF;
                             }
-                            const buf = encoder.encodeBuffer(lChunk, rChunk);
-                            if (buf.length > 0) mp3data.push(buf);
+                            const mp3b = encoder.encodeBuffer(chunkI16);
+                            if (mp3b.length > 0) mp3chunks.push(mp3b);
+                            // Yield to Garbage Collector frequently
                             if (i % (bSize * 5) === 0) await new Promise(r => setTimeout(r, 0));
                         }
                         const final = encoder.flush();
-                        if (final.length > 0) mp3data.push(final);
-                        res(new Blob(mp3data, { type: 'audio/mp3' }));
+                        if (final.length > 0) mp3chunks.push(final);
+                        res(new Blob(mp3chunks, { type: 'audio/mp3' }));
                     }));
 
                     const resUrl = URL.createObjectURL(mp3Blob);
+                    clearInterval(progressInterval);
                     setMp3Url(resUrl); setProgress(100); setStatus('success');
 
                     addHistoryItem({
@@ -1851,7 +1846,7 @@
                     });
 
                 } catch (e) {
-                    clearInterval(pInterval); clearInterval(msgInterval);
+                    clearInterval(progressInterval);
                     console.error(e);
                     alert("نعتذر، حدث تعارض في خوادم المعالجة السحابية.");
                     setStatus('input');
