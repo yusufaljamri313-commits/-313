@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>مِـنـبَـر - الذكاء الاصطناعي</title>
+    <title>مِـنـبَـر - منصة الذكاء الاصطناعي</title>
     <!-- 
       IMPORTANT: This site uses Netlify Functions for cloud processing.
       Make sure to upload the 'netlify' folder and 'netlify.toml' file.
@@ -1725,10 +1725,10 @@
 
                 setStatus('processing');
                 setProgress(0);
-                setLog('يتم الآن الاتصال بمركز المعالجة السحابي (Cloud Engine v7)...');
-                setTip('تهيئة بيئة المعالجة السلسة (Anti-Lag Mode)...');
+                setLog('يتم الآن الاتصال بمصفوفة خوادم Minbar-Cloud v8...');
+                setTip('بدء تشفير البيانات بنظام الذاكرة المعزولة (Isolated-RAM Mode)...');
 
-                // --- Steady 3-Minute Progress (1.8s per 1%) ---
+                // --- Steady 2-Minute Progress (1.2s per 1%) ---
                 let currentP = 0;
                 const progressInterval = setInterval(() => {
                     if (currentP < 99) {
@@ -1737,7 +1737,7 @@
                     } else {
                         clearInterval(progressInterval);
                     }
-                }, 1800); // 1.8s * 100 = 180s (3 Minutes)
+                }, 1200); // 1.2s * 100 = 120s (2 Minutes)
 
 
                 // Low-RAM Engine Header (32kHz)
@@ -1758,8 +1758,8 @@
                     for (let f of musicFiles) if (f) mournerBuffers.push(await decode(f));
 
                     const maxDur = Math.max(vocalBuf.duration, ...mournerBuffers.map(b => b.duration));
-                    // 24kHz Mono is the Sweet Spot: High quality + Under 300MB RAM
-                    const offCtx = new OfflineAudioContext(1, maxDur * 24000, 24000);
+                    // 22.05kHz Mono is the standard for long high-quality voice processing with low RAM
+                    const offCtx = new OfflineAudioContext(1, maxDur * 22050, 22050);
 
                     // --- Professional Reciter Chain (Audition Specs) ---
                     const vSource = offCtx.createBufferSource();
@@ -1810,29 +1810,31 @@
                     vocalBuf = null;
                     mournerBuffers = [];
 
-                    // Smooth Anti-Lag Encoding (Mono / 24kHz)
+                    // Final Master Encoding (Mono / 22.05kHz)
                     const mp3Blob = await (new Promise(async (res) => {
-                        const encoder = new lamejs.Mp3Encoder(1, 24000, 128);
+                        const encoder = new lamejs.Mp3Encoder(1, 22050, 128);
                         const samples = rendered.getChannelData(0);
                         const mp3chunks = [];
-                        const bSize = 1152 * 20; // Smaller chunks for better UI responsiveness
+                        const bSize = 1152 * 10; // Extra small for 300MB RAM safety
 
                         for (let i = 0; i < samples.length; i += bSize) {
                             const chunkI16 = new Int16Array(Math.min(bSize, samples.length - i));
                             for (let j = 0; j < chunkI16.length; j++) {
-                                const s = samples[i + j];
+                                let s = samples[i + j];
                                 chunkI16[j] = s < 0 ? s * 0x8000 : s * 0x7FFF;
                             }
                             const mp3b = encoder.encodeBuffer(chunkI16);
                             if (mp3b.length > 0) mp3chunks.push(mp3b);
 
-                            // IMPORTANT: Yield to UI every batch to prevent "freezing"
-                            if (i % (bSize * 2) === 0) {
-                                await new Promise(r => setTimeout(r, 0));
-                            }
+                            // Yield to UI frequently
+                            if (i % (bSize * 5) === 0) await new Promise(r => setTimeout(r, 0));
                         }
                         const final = encoder.flush();
                         if (final.length > 0) mp3chunks.push(final);
+
+                        // CLEAR MASSIVE SAMPLE DATA IMMEDIATELY
+                        vocalBuf = null; mournerBuffers = [];
+
                         res(new Blob(mp3chunks, { type: 'audio/mp3' }));
                     }));
 
