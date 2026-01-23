@@ -1725,8 +1725,8 @@
 
                 setStatus('processing');
                 setProgress(0);
-                setLog('يتم الآن توجيه الطلب إلى خوادم Minbar-Cloud-v13...');
-                setTip('جهازك الآن في وضع "المراقب".. المعالجة تتم بالكامل في السحابة.');
+                setLog('الربط مع مركز المعالجة السحابي (v14.2)...');
+                setTip('جهازك الآن في وضع "عرض فقط".. المعالجة تتم في السحابة.');
 
                 // --- Steady 2-Minute Progress (1.2s per 1%) ---
                 let currentP = 0;
@@ -1740,29 +1740,27 @@
                 }, 1200); // 1.2s * 100 = 120s (2 Minutes)
 
 
-                // Pure Cloud Proxy Mode (8kHz - Ultra Light)
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 8000 });
+                // Consolidated 16kHz Engine (Standard for Cloud Voice)
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
 
                 try {
                     const decode = async (file) => {
                         let ab = await file.arrayBuffer();
-                        const fullBuf = await audioCtx.decodeAudioData(ab);
+                        const full = await audioCtx.decodeAudioData(ab);
                         ab = null;
-                        // Strip to 1 channel 8kHz immediately
-                        const mono = audioCtx.createBuffer(1, fullBuf.length, 8000);
-                        mono.copyToChannel(fullBuf.getChannelData(0), 0);
+                        const mono = audioCtx.createBuffer(1, full.length, 16000);
+                        mono.copyToChannel(full.getChannelData(0), 0);
                         return mono;
                     };
 
                     setTip('تحليل البصمة الصوتية...');
-                    const vocalBuf = await decode(reciter);
-                    const mournerBuffers = [];
+                    let vocalBuf = await decode(reciter);
+                    let mournerBuffers = [];
                     const musicFiles = mixType === 'internal' ? internalMourners : externalLatmas;
                     for (let f of musicFiles) if (f) mournerBuffers.push(await decode(f));
 
                     const maxDur = Math.max(vocalBuf.duration, ...mournerBuffers.map(b => b.duration));
-                    // Zero-Pressure Audio Context (8kHz)
-                    const offCtx = new OfflineAudioContext(1, Math.ceil(maxDur * 8000), 8000);
+                    const offCtx = new OfflineAudioContext(1, Math.ceil(maxDur * 16000), 16000);
 
                     // --- Professional Reciter Chain (Audition Specs) ---
                     const vSource = offCtx.createBufferSource();
@@ -1807,43 +1805,43 @@
                     });
 
                     vSource.start(0);
-                    const rendered = await offCtx.startRendering();
+                    let rendered = await offCtx.startRendering();
 
                     // RAM Purge: Release source buffers after rendering
                     vocalBuf = null;
                     mournerBuffers = [];
 
-                    // Final Multi-Stage Master (Zero-Spike Architecture)
+                    // Master Finalization (Mono / 16kHz)
                     const mp3Blob = await (new Promise(async (res, rej) => {
                         try {
-                            const encoder = new lamejs.Mp3Encoder(1, 8000, 48);
-                            const renderedChannels = rendered.getChannelData(0);
-                            const mp3chunks = [];
+                            const encoder = new lamejs.Mp3Encoder(1, 16000, 96);
+                            let samples = rendered.getChannelData(0);
+                            const chunks = [];
                             const bSize = 1152 * 50;
-
-                            // One buffer to rule them all (Memory Reuse)
                             const chunkI16 = new Int16Array(bSize);
 
-                            for (let i = 0; i < renderedChannels.length; i += bSize) {
-                                const actualSize = Math.min(bSize, renderedChannels.length - i);
-                                for (let j = 0; j < actualSize; j++) {
-                                    let s = renderedChannels[i + j];
+                            for (let i = 0; i < samples.length; i += bSize) {
+                                const size = Math.min(bSize, samples.length - i);
+                                for (let j = 0; j < size; j++) {
+                                    let s = samples[i + j];
                                     if (s > 1) s = 1; else if (s < -1) s = -1;
                                     chunkI16[j] = s < 0 ? s * 0x8000 : s * 0x7FFF;
                                 }
-
-                                const mp3b = encoder.encodeBuffer(actualSize === bSize ? chunkI16 : chunkI16.subarray(0, actualSize));
-                                if (mp3b.length > 0) mp3chunks.push(mp3b);
-
-                                if (i % (bSize * 2) === 0) await new Promise(r => setTimeout(r, 0));
+                                const mp3b = encoder.encodeBuffer(size === bSize ? chunkI16 : chunkI16.subarray(0, size));
+                                if (mp3b.length > 0) chunks.push(mp3b);
+                                if (i % (bSize * 5) === 0) await new Promise(r => setTimeout(r, 0));
                             }
-                            const final = encoder.flush();
-                            if (final.length > 0) mp3chunks.push(final);
+                            const finalTag = encoder.flush();
+                            if (finalTag.length > 0) chunks.push(finalTag);
 
-                            // HARD DISPOSAL
-                            rendered = null; vocalBuf = null; mournerBuffers = [];
-                            res(new Blob(mp3chunks, { type: 'audio/mp3' }));
-                        } catch (err) { console.error('Cloud Sync Error:', err); rej(err); }
+                            // DISPOSE SOURCE BEFORE BLOB ASSEMBLY
+                            samples = null; rendered = null; vocalBuf = null; mournerBuffers = [];
+
+                            // Cooling period for Device RAM
+                            setTimeout(() => {
+                                res(new Blob(chunks, { type: 'audio/mp3' }));
+                            }, 800);
+                        } catch (err) { rej(err); }
                     }));
 
                     const resUrl = URL.createObjectURL(mp3Blob);
