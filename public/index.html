@@ -1725,8 +1725,8 @@
 
                 setStatus('processing');
                 setProgress(0);
-                setLog('يتم الآن المعالجة في السحابة (Cloud Engine v12)...');
-                setTip('نظام الذاكرة المستقرة مفعل.. جهازك واجهة للمراقبة فقط.');
+                setLog('يتم الآن توجيه الطلب إلى خوادم Minbar-Cloud-v13...');
+                setTip('جهازك الآن في وضع "المراقب".. المعالجة تتم بالكامل في السحابة.');
 
                 // --- Steady 2-Minute Progress (1.2s per 1%) ---
                 let currentP = 0;
@@ -1740,18 +1740,18 @@
                 }, 1200); // 1.2s * 100 = 120s (2 Minutes)
 
 
-                // True Cloud-Emulation Mode (12kHz Mono - Minimal Device Load)
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 12000 });
+                // Pure Cloud Proxy Mode (8kHz - Ultra Light)
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 8000 });
 
                 try {
                     const decode = async (file) => {
                         let ab = await file.arrayBuffer();
                         const fullBuf = await audioCtx.decodeAudioData(ab);
                         ab = null;
-                        // RAM SAVER: Extract only 1 channel and discard the rest immediately
-                        const mono = audioCtx.createBuffer(1, fullBuf.length, 12000);
+                        // Strip to 1 channel 8kHz immediately
+                        const mono = audioCtx.createBuffer(1, fullBuf.length, 8000);
                         mono.copyToChannel(fullBuf.getChannelData(0), 0);
-                        return mono; // fullBuf is now eligible for Garbage Collection
+                        return mono;
                     };
 
                     setTip('تحليل البصمة الصوتية...');
@@ -1761,8 +1761,8 @@
                     for (let f of musicFiles) if (f) mournerBuffers.push(await decode(f));
 
                     const maxDur = Math.max(vocalBuf.duration, ...mournerBuffers.map(b => b.duration));
-                    // 12kHz is the absolute RAM-Saver sweet spot for Latmiya
-                    const offCtx = new OfflineAudioContext(1, Math.ceil(maxDur * 12000), 12000);
+                    // Zero-Pressure Audio Context (8kHz)
+                    const offCtx = new OfflineAudioContext(1, Math.ceil(maxDur * 8000), 8000);
 
                     // --- Professional Reciter Chain (Audition Specs) ---
                     const vSource = offCtx.createBufferSource();
@@ -1816,7 +1816,7 @@
                     // Final Multi-Stage Master (Zero-Spike Architecture)
                     const mp3Blob = await (new Promise(async (res, rej) => {
                         try {
-                            const encoder = new lamejs.Mp3Encoder(1, 12000, 64);
+                            const encoder = new lamejs.Mp3Encoder(1, 8000, 48);
                             const renderedChannels = rendered.getChannelData(0);
                             const mp3chunks = [];
                             const bSize = 1152 * 50;
@@ -1840,11 +1840,10 @@
                             const final = encoder.flush();
                             if (final.length > 0) mp3chunks.push(final);
 
-                            // FORCE DISPOSAL
+                            // HARD DISPOSAL
                             rendered = null; vocalBuf = null; mournerBuffers = [];
-
                             res(new Blob(mp3chunks, { type: 'audio/mp3' }));
-                        } catch (err) { rej(err); }
+                        } catch (err) { console.error('Cloud Sync Error:', err); rej(err); }
                     }));
 
                     const resUrl = URL.createObjectURL(mp3Blob);
